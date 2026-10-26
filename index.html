@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Q-SYS Conference Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: designer's bench — TSC-80 touch screen and live audio path side by side, mixer matrix full width, tools and log beneath */
+:root {
+  --bg: #e3e5e3;
+  --surface: #f8f8f7;
+  --surface-2: #eeefed;
+  --line: #cbcfcb;
+  --fg: #1d211e;
+  --muted: #5b625d;
+  --accent: #1f8a4c;          /* signal green */
+  --accent-ink: #ffffff;
+  --ok: #2c8a4e;
+  --warn: #c98a12;
+  --bad: #c0392b;
+  --log-bg: #171a18;
+  --log-fg: #d2ddd5;
+  --meter-off: #d5d8d5;
+  --font-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1b1d1c; --surface: #242725; --surface-2: #2b2f2c; --line: #3a3f3b;
+    --fg: #e6e9e6; --muted: #a0a8a2; --accent: #5cc184; --accent-ink: #0b1f12;
+    --ok: #57c27f; --warn: #e3ac3c; --bad: #ef7a6b; --log-bg: #0f1210; --log-fg: #cfdad2; --meter-off: #333834;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1b1d1c; --surface: #242725; --surface-2: #2b2f2c; --line: #3a3f3b;
+  --fg: #e6e9e6; --muted: #a0a8a2; --accent: #5cc184; --accent-ink: #0b1f12;
+  --ok: #57c27f; --warn: #e3ac3c; --bad: #ef7a6b; --log-bg: #0f1210; --log-fg: #cfdad2; --meter-off: #333834;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 18px 32px;
+}
+.wrap { max-width: 1440px; margin: 0 auto; display: grid; gap: 18px; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; }
+.titlerow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.brand h1 { font-family: var(--font-display); font-weight: 700; font-size: 30px; margin: 0; line-height: 1.05; text-wrap: balance; }
+.byline { font-family: var(--font-display); font-weight: 600; font-size: 16px; letter-spacing: .04em; color: var(--accent); margin-top: 2px; }
+.brand p { margin: 4px 0 0; color: var(--muted); max-width: 72ch; }
+.clockbox { font-family: var(--font-mono); text-align: right; font-variant-numeric: tabular-nums; }
+.clockbox .t { font-size: 22px; font-weight: 600; }
+.clockbox .d { color: var(--muted); font-size: 13px; }
+
+.grid2 { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 1000px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+.col { display: grid; gap: 18px; min-width: 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+.card-h { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.card-h h2 { margin: 0; font-family: var(--font-display); font-size: 17px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.card-b { padding: 14px; }
+.hint { color: var(--muted); font-size: 13px; }
+.pill { display: inline-block; font-family: var(--font-display); font-weight: 600; font-size: 13px; letter-spacing: .05em; text-transform: uppercase; padding: 2px 8px; border-radius: 3px; background: var(--surface-2); border: 1px solid var(--line); }
+.pill.on { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: var(--accent); color: var(--accent); }
+.pill.ok { color: var(--ok); border-color: var(--ok); }
+.pill.bad { color: var(--bad); border-color: var(--bad); }
+
+/* ---------- TSC-80-G2 ---------- */
+.tsc { background: #16181a; border-radius: 16px; padding: 2.4% 2.6% 3.8%; position: relative; box-shadow: 0 10px 24px rgba(0,0,0,.2); }
+.tsc::after { content: "TSC-80-G2  ·  Exam-TSC80  ·  ConfRoom1"; position: absolute; left: 0; right: 0; bottom: 1.2%; text-align: center; color: #8a939b; font-family: var(--font-display); letter-spacing: .18em; font-size: clamp(8px, 1.1vw, 12px); }
+.glass { container-type: inline-size; aspect-ratio: 1280 / 800; width: 100%; position: relative; overflow: hidden; border-radius: 3px;
+  background:
+    radial-gradient(circle at 46% 104%, rgba(255,255,255,.55) 0 .6%, transparent .7%),
+    radial-gradient(circle at 55% 93%, rgba(255,255,255,.5) 0 .45%, transparent .55%),
+    radial-gradient(circle at 37% 90%, rgba(255,255,255,.45) 0 .4%, transparent .5%),
+    radial-gradient(circle at 63% 86%, rgba(255,255,255,.4) 0 .35%, transparent .45%),
+    radial-gradient(circle at 72% 96%, rgba(255,255,255,.5) 0 .5%, transparent .6%),
+    radial-gradient(ellipse at 52% 60%, #24262b 0%, #07080a 70%);
+}
+.uci { position: absolute; inset: 0; font-size: calc(100cqw / 80); color: #fff; font-family: "Roboto", var(--font-body); user-select: none; }
+/* inside .uci: 1em = 16 px of the 1280 x 800 panel */
+.u { position: absolute; }
+.ubtn { position: absolute; border: .12em solid rgba(255,255,255,.85); border-radius: .3em; background: rgba(10,10,12,.62); color: #fff; display: grid; place-items: center; text-align: center; line-height: 1.05; font-size: 1.6em; padding: 0; }
+.ubtn:active { background: rgba(255,255,255,.25); }
+.ubtn small { display: block; font-size: .78em; }
+.ubtn.green { background: linear-gradient(180deg, #33a853, #1d7a37); border-color: #e9f5ec; }
+.ubtn.red { background: linear-gradient(180deg, #b23a3a, #7d1f22); border-color: #f2dede; }
+.ubtn.mute { background: linear-gradient(180deg, #7a2228, #4d1418); }
+.ubtn.mute[aria-pressed="true"] { background: linear-gradient(180deg, #ff4b4b, #c41a1a); box-shadow: 0 0 1.2em rgba(255,60,60,.6); }
+.ubtn.dnd[aria-pressed="true"] { background: #c41a1a; }
+.ubtn svg { width: 60%; height: 60%; }
+.ubtn.cam { font-size: 1.75em; }
+.ubtn.cam[aria-pressed="true"] { box-shadow: 0 0 0 .14em #fff inset, 0 0 1em rgba(120,200,255,.7); filter: brightness(1.45); }
+.lbl { position: absolute; font-size: 1.85em; white-space: nowrap; }
+.led { position: absolute; width: 1.45em; height: 1.45em; border-radius: 50%; background: #6b0b0b; border: .15em solid #fff; }
+.led.on { background: #ff2a2a; box-shadow: 0 0 .9em #ff2a2a; }
+.led.blink { animation: blink .6s steps(2) infinite; }
+@keyframes blink { 50% { background: #6b0b0b; box-shadow: none; } }
+.dialbox { position: absolute; background: linear-gradient(180deg, #d9d9d9, #b9b9b9); border: .12em solid #9fd65b; color: #111; font-family: var(--font-mono); font-size: 1.9em; display: flex; align-items: center; padding: 0 .5em; overflow: hidden; white-space: nowrap; }
+.progress { position: absolute; background: #9a9a9a; border: .1em solid #ddd; color: #111; font-size: 1.55em; display: grid; place-items: center; white-space: nowrap; overflow: hidden; }
+.contacts { position: absolute; background: rgba(225,225,225,.92); color: #111; overflow-y: auto; font-size: 1.4em; }
+.contacts button { display: block; width: 100%; text-align: left; border: 0; border-bottom: 1px solid #c9c9c9; background: transparent; padding: .45em .6em; line-height: 1.2; }
+.contacts button small { display: block; color: #555; font-family: var(--font-mono); font-size: .8em; }
+.contacts button.sel { background: #9fd65b; }
+.rule { position: absolute; height: .1em; background: #fff; }
+.camgroup { position: absolute; border: .15em solid #fff; border-radius: .5em; }
+.camtitle { position: absolute; font-size: 1.6em; background: #000; padding: 0 .3em; }
+
+/* ---------- audio path ---------- */
+.chain { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; font-size: 13px; }
+.chain .blk { border: 1px solid var(--line); background: var(--surface-2); border-radius: 4px; padding: 3px 8px; font-weight: 500; }
+.chain .arr { color: var(--muted); }
+.mics { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 4px; }
+.mic { display: grid; gap: 4px; justify-items: center; min-width: 0; }
+.mbar { width: 100%; max-width: 22px; height: 120px; background: var(--meter-off); border-radius: 2px; position: relative; overflow: hidden; }
+.mbar i { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(0deg, #2c8a4e 0%, #79c043 60%, #e3c13c 85%, #d9472f 100%); transition: height .09s linear; }
+.gate { width: 12px; height: 12px; border-radius: 50%; background: var(--meter-off); border: 1px solid var(--line); }
+.gate.open { background: #3ac06a; border-color: #2c8a4e; box-shadow: 0 0 6px #3ac06a; }
+.gate.manual { background: #f3b52b; border-color: #c98a12; box-shadow: 0 0 6px #f3b52b; }
+.gate.muted { background: var(--bad); border-color: var(--bad); }
+.mic .n { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.mic button { border: 1px solid var(--line); background: var(--surface); border-radius: 3px; font-size: 10px; padding: 1px 0; width: 100%; max-width: 30px; }
+.mic button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+.legend .gate { display: inline-block; vertical-align: -1px; margin-right: 5px; }
+.srcgroup { font-size: 11px; color: var(--muted); display: grid; grid-template-columns: 8fr 5fr; text-align: center; margin-top: 4px; font-family: var(--font-display); letter-spacing: .06em; text-transform: uppercase; }
+.srcgroup span:first-child { border-top: 2px solid var(--line); margin-right: 4px; padding-top: 2px; }
+.srcgroup span:last-child { border-top: 2px solid var(--accent); padding-top: 2px; }
+.snap { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+
+/* cameras */
+.camview { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.screen { aspect-ratio: 16 / 9; background: #0e1419; border-radius: 4px; position: relative; overflow: hidden; max-width: 100%; }
+.screen svg { width: 100%; height: 100%; display: block; }
+.screen .osd { position: absolute; left: 8px; top: 6px; font-family: var(--font-mono); font-size: 11px; color: #cfe3f2; background: rgba(0,0,0,.45); padding: 1px 6px; border-radius: 2px; }
+.screen .rec { position: absolute; right: 8px; top: 6px; font-family: var(--font-mono); font-size: 11px; color: #ff6b5e; }
+.camlist { display: grid; gap: 6px; font-size: 13px; }
+.camlist div { display: flex; gap: 8px; align-items: center; }
+.camlist .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.camlist .dot.on { background: var(--accent); }
+
+/* mixer matrix */
+.mx-wrap { overflow-x: auto; }
+table.mx { border-collapse: collapse; font-size: 12.5px; min-width: 860px; width: 100%; }
+.mx th, .mx td { border: 1px solid var(--line); padding: 0; text-align: center; }
+.mx thead th { font-family: var(--font-display); font-weight: 600; font-size: 12.5px; padding: 4px 2px; background: var(--surface-2); white-space: nowrap; }
+.mx tbody th { text-align: left; padding: 4px 8px; font-weight: 500; white-space: nowrap; background: var(--surface-2); }
+.mx td { height: 30px; width: 46px; }
+.xp { width: 14px; height: 14px; border-radius: 50%; display: inline-block; border: 1.5px solid var(--line); vertical-align: middle; }
+.xp.set { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.xp.live { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.mx .outm td { height: 64px; vertical-align: bottom; padding: 4px 0; }
+.ometer { width: 12px; height: 54px; margin: 0 auto; background: var(--meter-off); border-radius: 2px; position: relative; overflow: hidden; }
+.ometer i { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(0deg, #2c8a4e 0%, #79c043 60%, #e3c13c 85%, #d9472f 100%); transition: height .09s linear; }
+.mx .grp th { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.srcstate { font-size: 11px; color: var(--muted); display: block; font-weight: 400; }
+.srcstate.on { color: var(--ok); }
+
+/* devices */
+table.dev { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.dev td, .dev th { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.dev th { font-family: var(--font-display); font-weight: 600; letter-spacing: .05em; text-transform: uppercase; font-size: 12.5px; color: var(--muted); }
+.dev .st { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
+.dev .st::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); margin-right: 6px; vertical-align: 0; }
+.dev .st.bad::before { background: var(--bad); }
+.dev .st.bad { color: var(--bad); }
+.dev-wrap { overflow-x: auto; }
+
+/* bench */
+.bench { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 18px; align-items: start; }
+@media (max-width: 1000px) { .bench { grid-template-columns: minmax(0, 1fr); } }
+.tools { display: grid; gap: 16px; }
+.tool h3 { margin: 0 0 6px; font-family: var(--font-display); font-weight: 600; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn { border: 1px solid var(--line); background: var(--surface-2); padding: 6px 12px; border-radius: 4px; font-weight: 500; }
+.btn:hover { border-color: var(--accent); }
+.btn[aria-pressed="true"], .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface-2); padding: 5px 11px; font-family: var(--font-display); font-weight: 600; font-size: 15px; border-right: 1px solid var(--line); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.log { background: var(--log-bg); color: var(--log-fg); font-family: var(--font-mono); font-size: 12.5px; line-height: 1.55; height: 400px; overflow: auto; padding: 10px 12px; border-radius: 0 0 6px 6px; }
+.log div { white-space: pre-wrap; word-break: break-word; }
+.log .ts { color: #7e90a1; }
+.log .tag { display: inline-block; min-width: 6em; font-weight: 600; }
+.tag.UCI { color: #f0a8d8; } .tag.POTS { color: #8ef0a4; } .tag.MIX { color: #6fd3ff; } .tag.SNAP { color: #ffd479; }
+.tag.VIDEO { color: #b7a6ff; } .tag.SCHED { color: #9fc2ff; } .tag.STATUS { color: #d9e2dc; } .tag.ERR { color: #ff7a6b; }
+footer { color: var(--muted); font-size: 13px; text-align: center; }
+@media (prefers-reduced-motion: reduce) { .led.blink { animation-duration: 2s; } .mbar i, .ometer i { transition: none; } }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="titlerow"><h1>Q-SYS Conference Room</h1><span class="pill">Core 110f · Exam-Core · ConfRoom1</span></div>
+      <div class="byline">Moe Azizi</div>
+      <p>Teleconference room with 13 microphones, POTS and USB conferencing, three cameras, digital signage and scheduled music. Use the touch screen as a member of the meeting would; the panels show what the Core is doing.</p>
+    </div>
+    <div class="clockbox"><div class="t" id="simTime">--:--:--</div><div class="d" id="simDate"></div></div>
+  </header>
+
+  <section class="grid2">
+    <div class="card">
+      <div class="card-h"><h2>Conference Control</h2><span class="hint">UCI on Exam-TSC80</span></div>
+      <div class="card-b"><div class="tsc"><div class="glass"><div class="uci" id="uci"></div></div></div></div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <div class="card-h"><h2>Microphones · live</h2><span class="pill" id="modePill">Automatic</span></div>
+        <div class="card-b">
+          <div class="chain"><span class="blk">13 mics</span><span class="arr">→</span><span class="blk">200 ms AEC</span><span class="arr">→</span><span class="blk">Gating Automixer · max 2 open · default Mic 4</span><span class="arr">→</span><span class="blk">Mixer 6×15</span></div>
+          <div class="mics" id="mics"></div>
+          <div class="srcgroup"><span>Core Mic/Line 1–8</span><span>IO-8-Flex 9–13</span></div>
+          <div class="legend"><span><i class="gate open"></i>Gate open</span><span><i class="gate manual"></i>Manual open</span><span><i class="gate muted"></i>Muted</span><span><i class="gate"></i>Closed</span><span>Tap a number to make that person talk</span></div>
+          <div class="snap">
+            <span class="hint">Snapshot bank “Moderator”</span>
+            <button class="btn" id="snap1">1 · Moderator only</button>
+            <button class="btn" id="snap2">2 · Open discussion</button>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h2>Camera to PC</h2><span class="hint">Mediacast Router 3×1 → USB Video Bridge</span></div>
+        <div class="card-b camview">
+          <div class="screen" id="camScreen"></div>
+          <div class="camlist" id="camList"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-h"><h2>Mixer 6×15 · crosspoints at 0 dB</h2><span class="hint">Lit dot = audio flowing now. Far-end feeds are mix-minus, so callers never hear themselves.</span></div>
+    <div class="card-b mx-wrap"><table class="mx" id="mx"></table></div>
+  </section>
+
+  <section class="bench">
+    <div class="col">
+      <div class="card">
+        <div class="card-h"><h2>Test tools</h2><span class="hint">Stand in for people, callers and sources</span></div>
+        <div class="card-b tools">
+          <div class="tool">
+            <h3>Room</h3>
+            <div class="row">
+              <button class="btn" id="autoTalk" aria-pressed="true">People talking at random</button>
+              <button class="btn" id="ringBtn">Ring the room (POTS)</button>
+            </div>
+          </div>
+          <div class="tool">
+            <h3>Sources</h3>
+            <div class="row">
+              <button class="btn" id="srcUsb" aria-pressed="false">PC video call (USB)</button>
+              <button class="btn" id="srcPc" aria-pressed="false">PC presentation audio</button>
+              <button class="btn" id="srcSign" aria-pressed="true">Digital signage (Dante)</button>
+              <button class="btn" id="srcPlayer" aria-pressed="false">Audio Player</button>
+            </div>
+          </div>
+          <div class="tool">
+            <h3>Clock · Command Scheduler plays music weekdays 12:00–13:00</h3>
+            <div class="row">
+              <div class="seg" id="speedSeg" role="group" aria-label="Clock speed"><button data-s="1">Real time</button><button data-s="60">×60</button></div>
+              <button class="btn" id="jumpNoon">Jump to Monday 11:59:50</button>
+              <button class="btn" id="jumpOne">Jump to 12:59:50</button>
+              <button class="btn" id="jumpNow">Back to now</button>
+            </div>
+          </div>
+          <div class="tool">
+            <h3>Monitoring</h3>
+            <div class="row"><button class="btn" id="dinoFail" aria-pressed="false">Unplug DinoTrapper-5000</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h2>Inventory · ConfRoom1</h2></div>
+        <div class="card-b dev-wrap"><table class="dev" id="dev"></table></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2>Event log</h2><span class="hint">Newest first</span></div>
+      <div class="log" id="log" aria-live="polite"></div>
+    </div>
+  </section>
+  <footer>Moe Azizi · Q-SYS Designer conference room design</footer>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ================= model ================= */
+const S = {
+  now: Date.now(), speed: 1,
+  dial: '', dnd: false, rx: -6,
+  call: { st: 'idle', num: '', t0: 0, timer: 0 },
+  spkMute: false, micMute: false,
+  cam: 0, mode: 'auto',
+  autoTalk: true, talk: new Set(), manualTalk: new Set(),
+  lvl: Array(13).fill(-70), open: new Set(), lastOpen: '',
+  src: { usb: false, pc: false, sign: true, player: false }, playerSched: false,
+  far: -70, usbFar: -70,
+  dinoDown: false, ping: 1.4,
+  sel: -1
+};
+const CONTACTS = [
+  ['Front Desk', '100'], ['IT Help Desk', '4165550142'], ['Conference Bridge', '18885550100'],
+  ['Facilities', '4165550199'], ['Toronto Office', '4165550177'], ['Montreal Office', '5145550123'], ['Vancouver Office', '6045550168']];
+const CAMS = [['Cup', 'NC-12x80'], ['Pen', 'NC-20x60'], ['Cell', 'NC-110']];
+const MX_IN = [
+  ['Gating Automixer', 'room mics'], ['POTS In', 'phone far end'], ['USB In', 'PC call far end'],
+  ['USB Sound Card', 'PC presentation'], ['Dante Signage', 'Software Dante RX'], ['Audio Player', 'playlist']];
+const MX_OUT = ['C1','C2','C3','C4','C5','C6','C7','C8','C9','C10','Disp L','Disp R','POTS Out','USB Out','AEC Ref'];
+// crosspoints set to 0 dB (task 13): each output gets all of, and only, the right sources
+const XP = MX_OUT.map((o, j) => {
+  if (j < 12) return [1,2,3,4,5];          // ceiling + DisplayAmp: everything except room mics
+  if (o === 'POTS Out') return [0,2,3];    // phone caller hears room, PC caller, presentation
+  if (o === 'USB Out') return [0,1,3];     // PC caller hears room, phone caller, presentation
+  return [1,2];                            // AEC reference = what the far end sends into the room
+});
+
+/* ================= log ================= */
+const logEl = $('log');
+const hhmmss = t => { const d = new Date(t); return [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2,'0')).join(':'); };
+function log(tag, msg) {
+  const div = document.createElement('div');
+  div.innerHTML = `<span class="ts">${hhmmss(S.now)}</span> <span class="tag ${tag}">${tag}</span> `;
+  div.appendChild(document.createTextNode(msg));
+  logEl.prepend(div);
+  while (logEl.childNodes.length > 250) logEl.lastChild.remove();
+}
+
+/* ================= UCI ================= */
+const uci = $('uci');
+const px = v => (v / 1280 * 100).toFixed(3) + '%';   // horizontal, of the 1280-wide panel
+const py = v => (v / 800 * 100).toFixed(3) + '%';    // vertical, of the 800-high panel
+const box = (x, y, w, h) => `left:${px(x)};top:${py(y)};width:${px(w)};height:${py(h)}`;
+const ICON = {
+  back: '<svg viewBox="0 0 24 24"><path d="M10 5 3 12l7 7v-4h11V9H10z" fill="#111"/></svg>',
+  clear: '<svg viewBox="0 0 24 24"><path d="M5 3 3 5l7 7-7 7 2 2 7-7 7 7 2-2-7-7 7-7-2-2-7 7z" fill="#111"/></svg>',
+  up: '<svg viewBox="0 0 24 24"><path d="M12 2 3 12h5v10h8V12h5z" fill="#fff"/></svg>',
+  down: '<svg viewBox="0 0 24 24"><path d="M12 22 3 12h5V2h8v10h5z" fill="#fff"/></svg>',
+  call: '<svg viewBox="0 0 24 24"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z" fill="#fff"/></svg>',
+  hang: '<svg viewBox="0 0 24 24"><path d="M12 9c-3 0-6 .9-8.3 2.5-.6.4-.7 1.2-.3 1.8l1.6 2.2c.4.5 1.1.7 1.7.4l2.3-1.2c.4-.2.7-.7.6-1.2l-.2-1.7c1.6-.5 3.6-.5 5.2 0l-.2 1.7c0 .5.2 1 .6 1.2l2.3 1.2c.6.3 1.3.1 1.7-.4l1.6-2.2c.4-.6.3-1.4-.3-1.8C18 9.9 15 9 12 9z" fill="#fff"/></svg>',
+  spk: '<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9z" fill="#fff"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="#fff" stroke-width="2" fill="none"/><path d="M3 3l18 18" stroke="#fff" stroke-width="2.4"/></svg>',
+  mic: '<svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z" fill="#fff"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4M8 21h8" stroke="#fff" stroke-width="2" fill="none"/><path d="M3 3l18 18" stroke="#fff" stroke-width="2.4"/></svg>'
+};
+function buildUci() {
+  const keys = [['1',''],['2','ABC'],['3','DEF'],['4','GHI'],['5','JKL'],['6','MNO'],['7','PQRS'],['8','TUV'],['9','WXYZ'],['*',''],['0',''],['#','']];
+  const kx = [455, 571, 688], ky = [193, 286, 378, 471];
+  let h = '';
+  h += `<span class="lbl" style="right:${px(1280-226)};top:${py(36)}">Off Hook</span><span class="led" id="ledHook" style="left:${px(238)};top:${py(42)}"></span>`;
+  h += `<span class="lbl" style="right:${px(1280-226)};top:${py(74)}">Ringing</span><span class="led" id="ledRing" style="left:${px(238)};top:${py(80)}"></span>`;
+  h += `<div class="dialbox" id="dialbox" style="${box(316,44,568,57)}"></div>`;
+  h += `<button class="ubtn" data-a="back" aria-label="Backspace" style="${box(892,44,44,57)};background:#e9e9e9">${ICON.back}</button>`;
+  h += `<button class="ubtn" data-a="clr" aria-label="Clear number" style="${box(951,44,45,57)};background:#e9e9e9">${ICON.clear}</button>`;
+  h += `<button class="ubtn" data-a="flash" style="${box(1030,36,104,80)}">Hook<br>Flash</button>`;
+  h += `<button class="ubtn dnd" data-a="dnd" id="bDnd" aria-pressed="false" style="${box(1146,36,105,80)}">DND</button>`;
+  h += `<span class="lbl" style="left:${px(300)};top:${py(112)};font-size:1.6em">Progress</span><div class="progress" id="progress" style="${box(393,111,444,33)}">Idle</div>`;
+  h += `<div class="rule" style="${box(28,184,110,2)}"></div><span class="lbl" style="left:${px(143)};top:${py(170)};font-size:1.55em">CONTACTS</span><div class="rule" style="${box(270,184,97,2)}"></div>`;
+  h += `<div class="contacts" id="contacts" style="${box(28,196,339,454)}"></div>`;
+  keys.forEach(([k, s], i) => {
+    h += `<button class="ubtn" data-key="${k}" style="${box(kx[i % 3], ky[Math.floor(i / 3)], 105, 81)}">${k}${s ? `<small>${s}</small>` : ''}</button>`;
+  });
+  h += `<span class="lbl" style="left:${px(1146)};top:${py(180)};width:${px(105)};text-align:center;font-size:1.55em;line-height:1.1;white-space:normal">Incoming Volume</span>`;
+  h += `<button class="ubtn" data-a="volup" aria-label="Incoming volume up" style="${box(1146,228,105,80)}">${ICON.up}</button>`;
+  h += `<button class="ubtn" data-a="voldn" aria-label="Incoming volume down" style="${box(1146,321,105,80)}">${ICON.down}</button>`;
+  h += `<button class="ubtn mute" data-a="spk" id="bSpk" aria-pressed="false" aria-label="Mute room speakers" style="${box(1146,470,105,82)}">${ICON.spk}</button>`;
+  h += `<button class="ubtn mute" data-a="mic" id="bMic" aria-pressed="false" aria-label="Mute room microphones" style="${box(1146,565,105,82)}">${ICON.mic}</button>`;
+  h += `<button class="ubtn green" data-a="call" aria-label="Call or answer" style="${box(838,565,105,82)}">${ICON.call}</button>`;
+  h += `<button class="ubtn red" data-a="hang" aria-label="Hang up" style="${box(992,565,105,82)}">${ICON.hang}</button>`;
+  h += `<div class="camgroup" style="${box(435,643,379,130)}"></div><span class="camtitle" style="left:${px(447)};top:${py(628)}">CAMERAS</span>`;
+  const camBg = ['#1d6b45', '#1f4a6e', '#2d2a78'];
+  CAMS.forEach(([n], i) => {
+    h += `<button class="ubtn cam" data-cam="${i}" aria-pressed="false" style="${box(kx[i], 674, 105, 84)};background:${camBg[i]}">${n}</button>`;
+  });
+  uci.innerHTML = h;
+  $('contacts').innerHTML = CONTACTS.map(([n, num], i) => `<button data-ct="${i}">${esc(n)}<small>${num}</small></button>`).join('');
+}
+function fmtNum(n) {
+  if (n.length === 10) return `${n.slice(0,3)}-${n.slice(3,6)}-${n.slice(6)}`;
+  if (n.length === 11) return `${n[0]}-${n.slice(1,4)}-${n.slice(4,7)}-${n.slice(7)}`;
+  return n;
+}
+function renderUci() {
+  $('dialbox').textContent = S.dial;
+  const c = S.call;
+  let p = 'Idle';
+  if (c.st === 'dialing') p = `Dialing ${fmtNum(c.num)}`;
+  else if (c.st === 'ringback') p = `Ringing ${fmtNum(c.num)}`;
+  else if (c.st === 'connected') p = `Connected ${fmtNum(c.num)}  ${mmss(S.now - c.t0)}`;
+  else if (c.st === 'incoming') p = `Incoming call ${fmtNum(c.num)}`;
+  else if (c.st === 'ended') p = 'Disconnected';
+  $('progress').textContent = p;
+  $('ledHook').className = 'led' + (['dialing','ringback','connected'].includes(c.st) ? ' on' : '');
+  $('ledRing').className = 'led' + (c.st === 'incoming' ? ' on blink' : '');
+  $('bDnd').setAttribute('aria-pressed', S.dnd);
+  $('bSpk').setAttribute('aria-pressed', S.spkMute);
+  $('bMic').setAttribute('aria-pressed', S.micMute);
+  uci.querySelectorAll('[data-cam]').forEach(b => b.setAttribute('aria-pressed', +b.dataset.cam === S.cam));
+  uci.querySelectorAll('[data-ct]').forEach(b => b.classList.toggle('sel', +b.dataset.ct === S.sel));
+}
+const mmss = ms => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+
+function setCall(st, num) {
+  clearTimeout(S.call.timer);
+  S.call.st = st; if (num !== undefined) S.call.num = num;
+  if (st === 'connected') S.call.t0 = S.now;
+  renderUci(); renderMatrix();
+}
+function placeCall() {
+  const num = S.dial.replace(/\D/g, '');
+  if (!num) { log('UCI', 'Call pressed with no number'); return; }
+  log('POTS', `Off hook, dialing ${fmtNum(num)}`);
+  setCall('dialing', num);
+  S.call.timer = setTimeout(() => { log('POTS', 'Ringback'); setCall('ringback');
+    S.call.timer = setTimeout(() => { log('POTS', `Call connected to ${fmtNum(num)}`); setCall('connected'); }, 2500); }, 1800);
+}
+function hangUp(why) {
+  if (S.call.st === 'idle' || S.call.st === 'ended') return;
+  log('POTS', `On hook (${why})${S.call.st === 'connected' ? ', call time ' + mmss(S.now - S.call.t0) : ''}`);
+  setCall('ended');
+  S.call.timer = setTimeout(() => setCall('idle'), 2000);
+}
+uci.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const d = b.dataset;
+  if (d.key) { if (S.dial.length < 24) S.dial += d.key;
+    if (S.call.st === 'connected') log('POTS', `DTMF ${d.key}`);
+    renderUci(); return; }
+  if (d.ct !== undefined) { S.sel = +d.ct; S.dial = CONTACTS[S.sel][1]; log('UCI', `Contact ${CONTACTS[S.sel][0]} selected`); renderUci(); return; }
+  if (d.cam !== undefined) { selectCam(+d.cam); return; }
+  switch (d.a) {
+    case 'back': S.dial = S.dial.slice(0, -1); break;
+    case 'clr': S.dial = ''; S.sel = -1; break;
+    case 'flash': log('POTS', S.call.st === 'connected' ? 'Hook flash (100 ms)' : 'Hook flash ignored, line idle'); break;
+    case 'dnd': S.dnd = !S.dnd; log('POTS', `Do Not Disturb ${S.dnd ? 'on' : 'off'}`); break;
+    case 'volup': S.rx = Math.min(10, S.rx + 2); log('UCI', `Incoming volume ${S.rx > 0 ? '+' : ''}${S.rx} dB`); break;
+    case 'voldn': S.rx = Math.max(-40, S.rx - 2); log('UCI', `Incoming volume ${S.rx > 0 ? '+' : ''}${S.rx} dB`); break;
+    case 'spk': S.spkMute = !S.spkMute; log('UCI', `Room speakers ${S.spkMute ? 'muted' : 'unmuted'}`); break;
+    case 'mic': S.micMute = !S.micMute; log('UCI', `Room microphones ${S.micMute ? 'muted (privacy)' : 'live'}`); break;
+    case 'call':
+      if (S.call.st === 'incoming') { log('POTS', `Answered ${fmtNum(S.call.num)}`); setCall('connected'); }
+      else if (S.call.st === 'idle' || S.call.st === 'ended') placeCall();
+      break;
+    case 'hang': hangUp(S.call.st === 'incoming' ? 'declined' : 'hang up pressed'); break;
+  }
+  renderUci(); renderMatrix();
+});
+function ring() {
+  if (S.call.st !== 'idle' && S.call.st !== 'ended') { log('POTS', 'Incoming call while line busy, caller gets busy tone'); return; }
+  if (S.dnd) { log('POTS', 'Incoming call rejected, Do Not Disturb is on'); return; }
+  const num = '4165550190';
+  log('POTS', `Ringing: ${fmtNum(num)}`);
+  setCall('incoming', num);
+  S.call.timer = setTimeout(() => { if (S.call.st === 'incoming') { log('POTS', 'Caller hung up before answer'); setCall('idle'); } }, 20000);
+}
+
+/* ================= cameras ================= */
+function camArt(i) {
+  const bg = '<rect width="320" height="180" fill="#2a3138"/><rect y="120" width="320" height="60" fill="#5b4a3a"/><rect y="118" width="320" height="4" fill="#3d3127"/>';
+  if (i === 0) return bg + '<path d="M128 62h64l-6 64a8 8 0 0 1-8 7h-36a8 8 0 0 1-8-7z" fill="#e8e3da"/><path d="M190 76c18 0 22 26 0 30" stroke="#e8e3da" stroke-width="7" fill="none"/><path d="M146 50c-4-8 6-12 2-20M162 50c-4-8 6-12 2-20M176 50c-4-8 6-12 2-20" stroke="#9aa3ab" stroke-width="2" fill="none" opacity=".7"/><ellipse cx="160" cy="64" rx="32" ry="5" fill="#4b2e1c"/>';
+  if (i === 1) return bg + '<g transform="rotate(-18 160 110)"><rect x="70" y="104" width="160" height="12" rx="5" fill="#1d4e8f"/><path d="M230 104l22 6-22 6z" fill="#e8d6b0"/><path d="M248 108.5l4 1.5-4 1.5z" fill="#222"/><rect x="88" y="100" width="40" height="4" fill="#c9ccd1"/></g>';
+  return bg + '<rect x="128" y="34" width="64" height="118" rx="9" fill="#111" stroke="#7d868f" stroke-width="2"/><rect x="134" y="46" width="52" height="92" rx="3" fill="#2f6fae"/><circle cx="160" cy="40" r="2" fill="#556"/><rect x="142" y="58" width="36" height="6" rx="2" fill="#cfe3f2" opacity=".8"/><rect x="142" y="70" width="26" height="6" rx="2" fill="#cfe3f2" opacity=".6"/>';
+}
+function selectCam(i) {
+  S.cam = i;
+  log('VIDEO', `Mediacast Router 3×1: output 1 ← input ${i + 1} (${CAMS[i][1]} “${CAMS[i][0]}”) → USB Video Bridge`);
+  renderUci(); renderCam();
+}
+function renderCam() {
+  $('camScreen').innerHTML = `<svg viewBox="0 0 320 180" aria-label="View from camera ${CAMS[S.cam][0]}">${camArt(S.cam)}</svg><span class="osd">${CAMS[S.cam][1]} · ${CAMS[S.cam][0]} · 1080p</span><span class="rec">● USB</span>`;
+  $('camList').innerHTML = CAMS.map(([n, m], i) => `<div><span class="dot${i === S.cam ? ' on' : ''}"></span>${m} “${n}”</div>`).join('') +
+    '<div class="hint" style="margin-top:4px">Selected on the touch screen</div>';
+}
+
+/* ================= microphones and automixer ================= */
+const micsEl = $('mics');
+micsEl.innerHTML = Array.from({ length: 13 }, (_, i) =>
+  `<div class="mic"><div class="mbar"><i id="mb${i}"></i></div><span class="gate" id="g${i}"></span><button data-m="${i}" aria-pressed="false" aria-label="Make person at mic ${i + 1} talk">${i + 1}</button></div>`).join('');
+micsEl.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
+  const i = +b.dataset.m; if (S.manualTalk.has(i)) S.manualTalk.delete(i); else S.manualTalk.add(i);
+  b.setAttribute('aria-pressed', S.manualTalk.has(i)); });
+const pct = db => Math.max(0, Math.min(100, (db + 60) / 60 * 100));
+function automix() {
+  const open = new Set();
+  if (S.mode === 'moderator') open.add(0);
+  else {
+    const cand = S.lvl.map((l, i) => [l, i]).filter(([l]) => l > -38).sort((a, b) => b[0] - a[0]).slice(0, 2);
+    cand.forEach(([, i]) => open.add(i));
+    if (!open.size) open.add(3); // default open mic: Mic 4
+  }
+  S.open = open;
+  const key = [...open].sort((a, b) => a - b).join(',');
+  if (key !== S.lastOpen && S.now - (S.lastMixLog || 0) > 1500) { S.lastOpen = key; S.lastMixLog = S.now; log('MIX', `Gates open: ${[...open].map(i => 'Mic ' + (i + 1)).join(', ')}${S.mode === 'moderator' ? ' (manual)' : open.size === 1 && open.has(3) && S.lvl[3] <= -38 ? ' (default)' : ''}`); }
+}
+function renderMics() {
+  for (let i = 0; i < 13; i++) {
+    $('mb' + i).style.height = pct(S.lvl[i]) + '%';
+    const g = $('g' + i);
+    g.className = 'gate' + (S.mode === 'moderator' ? (i === 0 ? ' manual' : ' muted') : S.open.has(i) ? ' open' : '');
+  }
+  const mp = $('modePill');
+  mp.textContent = S.mode === 'moderator' ? 'Moderator only' : 'Automatic · 2 open max';
+  mp.className = 'pill' + (S.mode === 'moderator' ? ' on' : '');
+  $('snap1').setAttribute('aria-pressed', S.mode === 'moderator');
+  $('snap2').setAttribute('aria-pressed', S.mode === 'auto');
+}
+function recallSnap(n) {
+  if (n === 1) { S.mode = 'moderator'; log('SNAP', 'Bank “Moderator” recall 1: Mic 1 manual open, Mics 2–13 muted'); }
+  else { S.mode = 'auto'; log('SNAP', 'Bank “Moderator” recall 2: Mics 2–13 unmuted, Mic 1 back to automatic'); }
+  S.lastOpen = ''; automix(); renderMics();
+}
+$('snap1').addEventListener('click', () => recallSnap(1));
+$('snap2').addEventListener('click', () => recallSnap(2));
+
+/* ================= mixer ================= */
+function srcLevels() {
+  const mixMics = S.mode === 'moderator' ? [S.lvl[0]] : [...S.open].map(i => S.lvl[i]);
+  const room = S.micMute ? -99 : Math.max(-99, ...mixMics);
+  const callUp = S.call.st === 'connected';
+  return [
+    room,
+    callUp ? S.far + S.rx + 6 : -99,
+    S.src.usb ? S.usbFar : -99,
+    S.src.pc ? -16 + Math.random() * 3 : -99,
+    S.src.sign ? -22 + Math.random() * 2 : -99,
+    S.src.player ? -14 + Math.random() * 4 : -99 ];
+}
+function buildMatrix() {
+  let h = '<thead><tr class="grp"><th></th><th colspan="10">Ceiling loudspeakers (Line Out 1–4, IO-8-Flex 5–10)</th><th colspan="2">DisplayAmp</th><th colspan="3">Far end and AEC</th></tr><tr><th>Input ↓ / Output →</th>' +
+    MX_OUT.map(o => `<th>${o}</th>`).join('') + '</tr></thead><tbody>';
+  MX_IN.forEach(([n, sub], i) => {
+    h += `<tr><th>${i + 1} · ${n}<span class="srcstate" id="ss${i}">${sub}</span></th>` +
+      MX_OUT.map((_, j) => `<td><span class="xp${XP[j].includes(i) ? ' set' : ''}" id="x${i}_${j}" title="${XP[j].includes(i) ? '0 dB' : 'off'}"></span></td>`).join('') + '</tr>';
+  });
+  h += '<tr class="outm"><th>Output level</th>' + MX_OUT.map((_, j) => `<td><div class="ometer"><i id="om${j}"></i></div></td>`).join('') + '</tr></tbody>';
+  $('mx').innerHTML = h;
+}
+function renderMatrix() {
+  const L = srcLevels();
+  const stateTxt = [
+    S.micMute ? 'muted on touch screen' : 'room mics',
+    S.call.st === 'connected' ? 'phone call live' : 'no call',
+    S.src.usb ? 'PC call live' : 'idle',
+    S.src.pc ? 'playing' : 'idle',
+    S.src.sign ? 'streaming' : 'off',
+    S.src.player ? (S.playerSched ? 'playing (scheduler)' : 'playing') : 'stopped'];
+  MX_IN.forEach((_, i) => { const el = $('ss' + i); el.textContent = stateTxt[i]; el.className = 'srcstate' + (L[i] > -60 ? ' on' : ''); });
+  MX_OUT.forEach((_, j) => {
+    let out = -99;
+    XP[j].forEach(i => { if (L[i] > out) out = L[i]; });
+    const roomOut = j < 12;
+    if (roomOut && S.spkMute) out = -99;
+    MX_IN.forEach((_, i) => {
+      const live = XP[j].includes(i) && L[i] > -60 && !(roomOut && S.spkMute);
+      $(`x${i}_${j}`).classList.toggle('live', live);
+    });
+    $('om' + j).style.height = pct(out) + '%';
+  });
+}
+
+/* ================= devices ================= */
+const DEV = [
+  ['Exam-Core', 'Core 110f', 'Processor, POTS, USB audio and video bridge'],
+  ['Exam-TSC80', 'TSC-80-G2', 'Shows the Conference Control UCI'],
+  ['IO-8-Flex-1', 'QIO / I/O-8 Flex', 'Mics 9–13, ceiling outputs 5–10'],
+  ['Cup', 'NC-12x80', 'Camera, input 1'], ['Pen', 'NC-20x60', 'Camera, input 2'], ['Cell', 'NC-110', 'Camera, input 3'],
+  ['DisplayAmp', 'Q-SYS network amplifier', 'Two AD-S10T beside the display'],
+  ['Software-Dante-RX-1', 'Software Dante receiver', 'Building digital signage, stereo'],
+  ['Neutrik-DPRO', 'Dante Adapter plugin', 'Added from Asset Manager'],
+  ['Monitoring-Proxy-1', 'DinoTrapper-5000 · TriceraTraps Inc.', 'Capture device, reported to Reflect via Ping']];
+function renderDev() {
+  $('dev').innerHTML = '<tr><th>Name</th><th>Model</th><th>Role</th><th>Status</th></tr>' + DEV.map(([n, m, r], i) => {
+    let st = 'OK', bad = false;
+    if (n === 'Monitoring-Proxy-1') { if (S.dinoDown) { st = 'Fault: no ping reply'; bad = true; } else st = `OK · ping ${S.ping.toFixed(1)} ms`; }
+    if (n === 'Software-Dante-RX-1' && !S.src.sign) st = 'OK · no stream';
+    return `<tr><td>${esc(n)}</td><td>${esc(m)}</td><td>${esc(r)}</td><td><span class="st${bad ? ' bad' : ''}">${st}</span></td></tr>`;
+  }).join('');
+}
+
+/* ================= tools ================= */
+function toggleBtn(id, fn) { $(id).addEventListener('click', () => { const v = $(id).getAttribute('aria-pressed') !== 'true'; $(id).setAttribute('aria-pressed', v); fn(v); }); }
+toggleBtn('autoTalk', v => { S.autoTalk = v; if (!v) S.talk.clear(); log('STATUS', v ? 'Simulated meeting chatter on' : 'Simulated meeting chatter off'); });
+toggleBtn('srcUsb', v => { S.src.usb = v; log('MIX', `USB In: PC video call ${v ? 'started' : 'ended'}`); renderMatrix(); });
+toggleBtn('srcPc', v => { S.src.pc = v; log('MIX', `USB sound card: presentation audio ${v ? 'playing' : 'stopped'}`); renderMatrix(); });
+toggleBtn('srcSign', v => { S.src.sign = v; log('MIX', `Dante signage stream ${v ? 'present' : 'lost'}`); renderMatrix(); renderDev(); });
+toggleBtn('srcPlayer', v => { setPlayer(v, false); });
+toggleBtn('dinoFail', v => { S.dinoDown = v; log(v ? 'ERR' : 'STATUS', v ? 'Ping: DinoTrapper-5000 not responding, Monitoring Proxy reports fault to Reflect' : 'Ping: DinoTrapper-5000 responding again, status OK'); renderDev(); });
+$('ringBtn').addEventListener('click', ring);
+function setPlayer(on, bySched) {
+  S.src.player = on; S.playerSched = on && bySched;
+  $('srcPlayer').setAttribute('aria-pressed', on);
+  log(bySched ? 'SCHED' : 'MIX', `Audio Player ${on ? 'play' : 'stop'}${bySched ? ' (Command Scheduler)' : ''}`);
+  renderMatrix();
+}
+$('speedSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S.speed = +b.dataset.s; renderChrome(); } });
+function jump(dayFn, h, m, s) { const t = new Date(S.now); dayFn(t); t.setHours(h, m, s, 0); S.now = t.getTime(); log('STATUS', `Clock set to ${t.toDateString()} ${hhmmss(S.now)}`); checkSchedule(true); renderChrome(); }
+$('jumpNoon').addEventListener('click', () => jump(t => { const add = (8 - t.getDay()) % 7 || 7; t.setDate(t.getDate() + (t.getDay() === 1 ? 0 : add)); }, 11, 59, 50));
+$('jumpOne').addEventListener('click', () => jump(t => { if (t.getDay() === 0 || t.getDay() === 6) t.setDate(t.getDate() + (t.getDay() === 6 ? 2 : 1)); }, 12, 59, 50));
+$('jumpNow').addEventListener('click', () => { S.now = Date.now(); log('STATUS', 'Clock back to real time'); checkSchedule(true); renderChrome(); });
+
+/* ================= scheduler ================= */
+let schedWas = null;
+function inWindow(t) { const d = new Date(t), wd = d.getDay(), h = d.getHours(); return wd >= 1 && wd <= 5 && h === 12; }
+function checkSchedule(force) {
+  const on = inWindow(S.now);
+  if (on !== schedWas || force) {
+    if (schedWas !== null || force) {
+      if (on && !S.src.player) setPlayer(true, true);
+      else if (!on && S.playerSched) setPlayer(false, true);
+    }
+    schedWas = on;
+  }
+}
+
+/* ================= clock and audio simulation ================= */
+function renderChrome() {
+  document.querySelectorAll('#speedSeg button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.s === S.speed));
+  const d = new Date(S.now);
+  $('simTime').textContent = hhmmss(S.now);
+  $('simDate').textContent = d.toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+}
+let lastReal = performance.now(), talkClock = 0, pingClock = 0;
+function speech(prev, talking) {
+  if (!talking) return Math.max(-62 + Math.random() * 4, prev - 6);
+  const target = Math.random() < .25 ? -34 + Math.random() * 6 : -24 + Math.random() * 12;
+  return prev + (target - prev) * .6;
+}
+function tick() {
+  const nowR = performance.now(), dt = Math.min(nowR - lastReal, 1000); lastReal = nowR;
+  const before = S.now; S.now += dt * S.speed;
+  talkClock += dt; pingClock += dt * S.speed;
+  if (S.autoTalk && talkClock > 2600) {
+    talkClock = 0;
+    S.talk.clear();
+    const n = Math.random() < .55 ? 1 : Math.random() < .6 ? 2 : Math.random() < .5 ? 3 : 0;
+    while (S.talk.size < n) S.talk.add(Math.floor(Math.random() * 13));
+  }
+  for (let i = 0; i < 13; i++) {
+    let talking = S.talk.has(i) || S.manualTalk.has(i);
+    S.lvl[i] = speech(S.lvl[i], talking);
+  }
+  S.far = S.call.st === 'connected' ? speech(S.far, Math.random() < .7) : -99;
+  S.usbFar = S.src.usb ? speech(S.usbFar < -90 ? -60 : S.usbFar, Math.random() < .7) : -99;
+  automix();
+  if (pingClock > 5000) { pingClock = 0; if (!S.dinoDown) { S.ping = 0.8 + Math.random() * 2; renderDev(); } }
+  if (Math.floor(before / 1000) !== Math.floor(S.now / 1000)) { renderChrome(); checkSchedule(false); if (S.call.st === 'connected') renderUci(); }
+  renderMics(); renderMatrix();
+}
+
+/* ================= boot ================= */
+buildUci(); buildMatrix();
+log('STATUS', 'Design running on Exam-Core (Core 110f), location ConfRoom1');
+log('STATUS', 'Exam-TSC80 online, showing UCI “Conference Control”');
+log('VIDEO', 'Mediacast Router 3×1 ready: Cup (NC-12x80), Pen (NC-20x60), Cell (NC-110)');
+selectCam(0);
+schedWas = inWindow(S.now); if (schedWas) setPlayer(true, true);
+renderUci(); renderCam(); renderDev(); renderChrome(); automix(); renderMics(); renderMatrix();
+setInterval(tick, 110);
+})();
+</script>
+
+</body>
+</html>
